@@ -1,0 +1,41 @@
+## Files in this Branch Specifically:
+
+    db_players.py: database helper functions using psycopg2 with parameterized queries.
+
+    test_players.py: small script to verify insert and lookup.
+
+    install.sh: optional helper to set up the venv and install psycopg2-binary.
+
+## Usage
+
+    Activate the environment
+
+        . .venv/bin/activate
+
+    Run the test
+
+        python test_players.py
+
+    Expected example output
+
+        Insert first: True
+
+        Insert duplicate: False
+
+        Lookup existing: Ruben
+
+        Lookup missing: None
+
+## Verify in psql
+
+    Describe the table
+
+        psql -d photon -U student -h 127.0.0.1 -c "\d players"
+
+    View rows
+
+        psql -d photon -U student -h 127.0.0.1 -c "SELECT id, codename FROM players ORDER BY id;"
+
+    Delete a test row (visit test_players.py for example id)
+
+        psql -d photon -U student -h 127.0.0.1 -c "DELETE FROM players WHERE id = 501;"
