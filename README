@@ -1,41 +1,133 @@
-## Files in this Branch Specifically:
+# Team 4 – Software Engineering Class Project
 
-    db_players.py: database helper functions using psycopg2 with parameterized queries.
+This repository contains both database and UDP messaging modules for Team 4’s class project.
 
-    test_players.py: small script to verify insert and lookup.
+---
 
-    install.sh: optional helper to set up the venv and install psycopg2-binary.
+## Team Members
+
+| Real Name         | GitHub Username      |
+|-------------------|---------------------|
+| Ruben Priest      | ruben-priest        |
+| Tyler Bean        | FreezyMK1           |
+| Timothy Shtunyuk  | tshtu21             |
+| Diego Peredo      |                     |
+| Ingrid Mojica     | IngridMojica        |
+
+---
+
+## Project Structure
+
+### Database Section
+
+- `db_players.py`: Database helper functions using `psycopg2` and parameterized queries.
+- `test_players.py`: Script to verify player insertions and codename lookups.
+- `install.sh`: Helper to create a Python virtual environment and install `psycopg2-binary`.
+
+### UDP Networking Section
+
+- `udp_broadcast.py`: Functions for sending equipment IDs, hit events, and special codes.
+- `udp_receiver.py`: Contains `Receiver` class and functions for starting, stopping, and retrieving UDP messages.
+
+---
+
+## Installation & Environment Setup
+
+**Database setup:**
+
+1. Create and activate a virtual environment:
+    ```
+    python -m venv .venv
+    . .venv/bin/activate
+    ```
+2. Install dependencies:
+    ```
+    python -m pip install --upgrade pip
+    python -m pip install psycopg2-binary
+    ```
+
+Alternatively, run:
+
+./install.sh
+
+text
+
+---
 
 ## Usage
 
-    Activate the environment
+### Database Functions
 
-        . .venv/bin/activate
+1. **Activate the environment:**
+    ```
+    . .venv/bin/activate
+    ```
+2. **Run the test script:**
+    ```
+    python test_players.py
+    ```
+    **Expected example output:**
+    ```
+    Insert first: True
+    Insert duplicate: False
+    Lookup existing: Ruben
+    Lookup missing: None
+    ```
 
-    Run the test
+### UDP Messaging
 
-        python test_players.py
+1. **Start receiver (terminal A):**
+    ```
+    python udp_receiver.py
+    ```
+2. **Send broadcast messages (terminal B):**
+    ```
+    python udp_broadcast.py
+    ```
 
-    Expected example output
+---
 
-        Insert first: True
+## Database Verification in psql
 
-        Insert duplicate: False
+- **Describe the table:**
+    ```
+    psql -d photon -U student -h 127.0.0.1 -c "\d players"
+    ```
+- **View all player entries:**
+    ```
+    psql -d photon -U student -h 127.0.0.1 -c "SELECT id, codename FROM players ORDER BY id;"
+    ```
+- **Delete a test row (example id: 501):**
+    ```
+    psql -d photon -U student -h 127.0.0.1 -c "DELETE FROM players WHERE id = 501;"
+    ```
 
-        Lookup existing: Ruben
+---
 
-        Lookup missing: None
+## UDP Ports, Addresses & Message Formats
 
-## Verify in psql
+- **Send (outgoing/game server):** `127.0.0.1:7500`
+- **Receive (events):** bind to `0.0.0.0:7501`
 
-    Describe the table
+**Message formats:**
+- Incoming: `"attacker:hit"` (example: `12:34`) and sometimes a single integer.
+- Reply/outgoing: equipment ID of hit player (single integer string, e.g. `"34"`).
+- Special codes:
+    - **202** = start  
+    - **221** = game end (send `221` three times)
 
-        psql -d photon -U student -h 127.0.0.1 -c "\d players"
+---
 
-    View rows
+## Running the Main Application
 
-        psql -d photon -U student -h 127.0.0.1 -c "SELECT id, codename FROM players ORDER BY id;"
+Use the following command depending on your Python setup:
 
-    Delete a test row (visit test_players.py for example id)
+python main.py
+or
 
-        psql -d photon -U student -h 127.0.0.1 -c "DELETE FROM players WHERE id = 501;"
+python3 main.py
+
+text
+(Choose whichever works on your system.)
+
+*All commands and procedures in this README can be copy-pasted in your terminal or environment for setup and troubleshooting.*

@@ -1,9 +1,9 @@
 import os
 import pygame as pg
-from ui.widgets.widgets_core import Label, Button
-from ui.widgets.inputs import TextInput, TeamSelector
-from graphs.charts import draw_bar_chart
-from config import TEAM_CAP  #team size cap (e.g., 15)
+from src.ui.widgets.widgets_core import Label, Button
+from src.ui.widgets.inputs import TextInput, TeamSelector
+from src.graphs.charts import draw_bar_chart
+from src.config import TEAM_CAP  #team size cap (e.g., 15)
 
 # -----------------------------------------------------------------------------
 # DB / NET IMPORTS WITH SAFE FALLBACKS
@@ -17,7 +17,7 @@ USE_STUBS = os.getenv("PHOTON_USE_STUBS", "0") == "1"
 # ---- Database fallback -------------------------------------------------------
 if not USE_STUBS:
     try:
-        from db import pg as db  # expects get_codename(int)->str|None and add_player(int,str)->None
+        from db_players import pg as db  # expects get_codename(int)->str|None and add_player(int,str)->None
     except Exception as e:
         print(f"Falling back to stub because import failed: {e}")
         USE_STUBS = True
@@ -34,7 +34,7 @@ if USE_STUBS:
 # ---- UDP fallback ------------------------------------------------------------
 if not USE_STUBS:
     try:
-        from net.udp_broadcast import send_equipment_id  # expects send_equipment_id(int, addr="127.0.0.1", port=7500)
+        from udp_broadcast import send_equipment_id  # expects send_equipment_id(int, addr="127.0.0.1", port=7500)
     except Exception as e:
         print(f"Falling back to stub because import failed: {e}")
         USE_STUBS = True
@@ -60,6 +60,10 @@ class PlayerEntry:
         self.in_pid.focus = True  # autofocus first field
         self.team_sel = TeamSelector((200, 210))
         self.btn_add  = Button((200, 270, 160, 40), "Add Player", self._on_add)
+
+        self.in_addr = TextInput((40, 420, 180, 32), text=self.state.addr, placeholder="IP") #///////////////////////////////////////////////////////////////////////////////////////////////////////
+        self.in_port = TextInput((230, 420, 100, 32), text="7500", numeric=True, placeholder="Port")
+
 
         self.message = ""                      # status line for success/errors
         self.font    = pg.font.Font(None, 28)  # shared font
@@ -91,6 +95,9 @@ class PlayerEntry:
         self.team_sel.handle_event(ev)
         self.btn_add.handle_event(ev)
 
+        self.in_addr.handle_event(ev) # ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+        self.in_port.handle_event(ev)
+
     def update(self, dt):  # not used now, but kept for future timers/validation
         pass
 
@@ -111,6 +118,11 @@ class PlayerEntry:
         self.team_sel.draw(surf)
         self.btn_add.draw(surf)
 
+        # UDP target controls (label + inputs)
+        surf.blit(self.font.render("UDP Target", True, (220,220,230)), (40, 395))
+        self.in_addr.draw(surf)
+        self.in_port.draw(surf)
+
         # Team chart (right panel)
         draw_bar_chart(surf, pg.Rect(surf.get_width()-320, 60, 260, 140),
                        self.state.team_counts, "Teams")
@@ -119,6 +131,10 @@ class PlayerEntry:
         if self.message:
             surf.blit(self.font.render(self.message, True, (250,220,120)), (40, 330))
         surf.blit(self.font.render("F5: Start   F12: Clear", True, (170,180,195)), (40, 370))
+
+        surf.blit(self.font.render("UDP Target", True, (220,220,230)), (40, 395)) #//////////////////////////////////////////////////////////////////////////////////////////
+        self.in_addr.draw(surf); self.in_port.draw(surf)
+
 
     # -------------------------------------------------------------------------
     # Helpers
@@ -155,8 +171,21 @@ class PlayerEntry:
 
         team = self.team_sel.get_team()
 
-        #enforce team capacity before touching DB/NET
-        if self.state.team_counts.get(team, 0) >= TEAM_CAP: #TEAM_CAP from config.py
+        # ---------- in-memory duplicate checks ----------
+        # 1) Player ID unique
+        if pid in self.state.players:
+            existing = self.state.players[pid]
+            self.message = f"Player ID {pid} already exists (team {existing['team']}, codename {existing['codename']})."
+            return
+
+        # 2) Equip ID unique (optional but recommended)
+        for p_pid, p in self.state.players.items():
+            if p.get("equip") == equip:
+                self.message = f"Equipment ID {equip} is already assigned to PID {p_pid}."
+                return
+
+        # enforce team cap before touching DB/NET
+        if self.state.team_counts.get(team, 0) >= TEAM_CAP:
             self.message = f"{team} team is full (cap {TEAM_CAP})"
             return
 
@@ -174,9 +203,9 @@ class PlayerEntry:
                 self.message = "Codename required for new player"
                 return
             try:
-                db.add_player(pid, name_txt)   # may be stub or real
+                db.add_player(pid, name_txt)
             except Exception as e:
-                # Keep going—UI should still function and show status.
+                # Keep going—UI should still function and show status
                 self.message = f"DB insert error; continuing with stub. ({e})"
 
             codename = name_txt
@@ -186,10 +215,22 @@ class PlayerEntry:
                 self.in_name.set_value(existing)
             codename = name_txt or existing
 
+        addr_txt = (self.in_addr.get_value().strip() or "127.0.0.1") 
+        port_txt = (self.in_port.get_value().strip() or "7500")        
+        try:                                                          
+            port = int(port_txt)                                  
+            if not (1 <= port <= 65535):                            
+                raise ValueError                                   
+        except ValueError:                                           
+            self.message = "Port must be 1–65535"                     
+            return                                                     
+        # persist chosen address so next add reuses it               
+        self.state.addr = addr_txt                                 
+
         # UDP BROADCAST of equipment id
         try:
-            # state.addr should be a string like "127.0.0.1"
-            send_equipment_id(equip, addr=self.state.addr)
+            # use chosen IP/Port
+            send_equipment_id(equip, addr=addr_txt, port=port)  # UPDATED
         except Exception as e:
             # Non-fatal: we still update local UI so the grader sees progress.
             self.message = f"UDP send error; continuing. ({e})"
@@ -200,4 +241,4 @@ class PlayerEntry:
 
         # Final user message depends on whether we were on real services or stubs
         self.message = "Added player + broadcast sent" if not USE_STUBS else \
-                       "Added player (DB/UDP stubbed locally)"
+                    "Added player (DB/UDP stubbed locally)"

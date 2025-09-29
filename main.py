@@ -1,5 +1,7 @@
-import pygame
+# main.py
 import sys
+import pygame
+from src.ui.screens.player_entry import PlayerEntry  # << use real screen
 
 # -----------------------------
 # Config
@@ -9,6 +11,18 @@ FPS = 60
 SPLASH_DURATION_MS = 3000  # 3 seconds
 APP_TITLE = "Laser Tag - Sprint 2"
 LOGO_PATH = "assets/logo.jpg"  # path to your logo
+
+# -----------------------------
+# Shared App State for screens
+# -----------------------------
+class AppState:
+    def __init__(self):
+        # team name -> count (used by charts)
+        self.team_counts = {"Red": 0, "Green": 0}
+        # pid -> {codename, team, equip}
+        self.players = {}
+        # where UDP should broadcast by default (can be changed later)
+        self.addr = "127.0.0.1"
 
 # -----------------------------
 # Base Screen Class
@@ -29,9 +43,7 @@ class BaseScreen:
 class SplashScreen(BaseScreen):
     def on_enter(self):
         self.start_time = pygame.time.get_ticks()
-        # Load logo when splash starts
         self.logo = pygame.image.load(LOGO_PATH).convert_alpha()
-        # Scale to a nice size
         self.logo = pygame.transform.smoothscale(self.logo, (400, 300))
 
     def update(self, dt):
@@ -39,26 +51,44 @@ class SplashScreen(BaseScreen):
         if elapsed >= SPLASH_DURATION_MS:
             self.manager.switch_to("player_entry")
 
+    def handle_event(self, event):
+        # allow any key or click to skip splash
+        if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+            self.manager.switch_to("player_entry")
+
     def draw(self, surface):
         surface.fill((10, 12, 20))
-        # Center logo
         surface.blit(self.logo, self.logo.get_rect(center=(WIDTH//2, HEIGHT//2)))
 
 # -----------------------------
-# Player Entry Screen (stub)
+# Player Entry Screen (REAL UI)
 # -----------------------------
 class PlayerEntryScreen(BaseScreen):
-    def on_enter(self):
-        self.font = pygame.font.SysFont("arial", 28)
+    def __init__(self, manager, state: AppState):
+        super().__init__(manager)
+        # create the actual PlayerEntry view and tell it how to start the game
+        self.view = PlayerEntry(
+            state=state,
+            on_start=lambda: self.manager.switch_to("play")
+        )
+
+    # delegate lifecycle + io to the real view so all buttons/inputs work
+    def on_enter(self): 
+        if hasattr(self.view, "on_enter"): 
+            self.view.on_enter()
+
+    def on_exit(self): 
+        if hasattr(self.view, "on_exit"): 
+            self.view.on_exit()
 
     def handle_event(self, event):
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-            self.manager.switch_to("play")
+        self.view.handle_event(event)
+
+    def update(self, dt):
+        self.view.update(dt)
 
     def draw(self, surface):
-        surface.fill((18, 22, 28))
-        text = self.font.render("Player Entry (press Enter to continue)", True, (230, 230, 240))
-        surface.blit(text, text.get_rect(center=(WIDTH//2, HEIGHT//2)))
+        self.view.draw(surface)
 
 # -----------------------------
 # Play Screen (stub)
@@ -69,7 +99,7 @@ class PlayScreen(BaseScreen):
 
     def draw(self, surface):
         surface.fill((12, 16, 18))
-        text = self.font.render("Play Screen – game goes here", True, (220, 235, 220))
+        text = self.font.render("Play Screen - game goes here", True, (220, 235, 220))
         surface.blit(text, text.get_rect(center=(WIDTH//2, HEIGHT//2)))
 
 # -----------------------------
@@ -84,7 +114,7 @@ class ScreenManager:
         self.registry[name] = screen
 
     def switch_to(self, name):
-        if self.active: 
+        if self.active:
             self.active.on_exit()
         self.active = self.registry[name]
         self.active.on_enter()
@@ -97,13 +127,19 @@ class App:
         pygame.init()
         pygame.font.init()
         pygame.display.set_caption(APP_TITLE)
+
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
+
+        # shared state for DB/UDP/UI
+        self.state = AppState()
+
         self.manager = ScreenManager()
         self.manager.register("splash", SplashScreen(self.manager))
-        self.manager.register("player_entry", PlayerEntryScreen(self.manager))
+        self.manager.register("player_entry", PlayerEntryScreen(self.manager, self.state))
         self.manager.register("play", PlayScreen(self.manager))
         self.manager.switch_to("splash")
+
         self.running = True
 
     def run(self):
@@ -123,6 +159,7 @@ class App:
                 self.manager.active.draw(self.screen)
 
             pygame.display.flip()
+
         pygame.quit()
         sys.exit()
 
