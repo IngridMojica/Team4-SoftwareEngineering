@@ -17,7 +17,7 @@ USE_STUBS = os.getenv("PHOTON_USE_STUBS", "0") == "1"
 # ---- Database fallback -------------------------------------------------------
 if not USE_STUBS:
     try:
-        from db_players import pg as db  # expects get_codename(int)->str|None and add_player(int,str)->None
+        import db_players as db  # expects get_codename(int)->str|None and add_player(int,str)->None
     except Exception as e:
         print(f"Falling back to stub because import failed: {e}")
         USE_STUBS = True
