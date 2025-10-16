@@ -36,3 +36,28 @@ def add_player(player_id: int, codename: str) -> bool:
     finally:
         if cur: cur.close()
         if conn: conn.close()
+
+def clear_all_players():
+    conn = cur = None
+    try:
+        conn = psycopg2.connect(**connection_params)
+        cur = conn.cursor()
+
+        cur.execute("TRUNCATE players")
+        conn.commit()
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+def get_all_players_info():
+    conn = cur = None
+    try:
+        conn = psycopg2.connect(**connection_params)
+        cur = conn.cursor()
+
+        cur.execute("SELECT id, codename FROM players ORDER BY id;")
+        rows = cur.fetchall()
+        return rows
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
