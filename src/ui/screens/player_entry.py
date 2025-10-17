@@ -2,16 +2,9 @@ import os
 import pygame as pg
 from src.ui.widgets.widgets_core import Label, Button
 from src.ui.widgets.inputs import TextInput, TeamSelector
-from src.graphs.charts import draw_bar_chart
-from src.config import TEAM_CAP  #team size cap (e.g., 15)
+from src.graphs.charts import draw_team_table, draw_bar_chart
+from src.config import TEAM_CAP
 
-# -----------------------------------------------------------------------------
-# DB / NET IMPORTS WITH SAFE FALLBACKS
-# - We try to import the real modules.
-# - If they're not available yet (teammates haven't pushed or services aren't running),
-#   we provide minimal "stub" replacements so the UI still works and shows messages.
-# - You can force stubs locally by setting env var: PHOTON_USE_STUBS=1
-# -----------------------------------------------------------------------------
 USE_STUBS = os.getenv("PHOTON_USE_STUBS", "0") == "1"
 
 # ---- Database fallback -------------------------------------------------------
@@ -61,14 +54,14 @@ class PlayerEntry:
         self.team_sel = TeamSelector((200, 210))
         self.btn_add  = Button((200, 270, 160, 40), "Add Player", self._on_add)
 
-        self.in_addr = TextInput((40, 420, 180, 32), text=self.state.addr, placeholder="IP") #///////////////////////////////////////////////////////////////////////////////////////////////////////
+        self.in_addr = TextInput((40, 420, 180, 32), text=self.state.addr, placeholder="IP") 
         self.in_port = TextInput((230, 420, 100, 32), text="7500", numeric=True, placeholder="Port")
 
 
         self.message = ""                      # status line for success/errors
         self.font    = pg.font.Font(None, 28)  # shared font
 
-    # Screen lifecycle (called by your router)
+    # Screen lifecycle
     def on_enter(self): pass
     def on_exit(self):  pass
 
@@ -85,7 +78,11 @@ class PlayerEntry:
 
         # ----- Global keys: F12 clears, F5 starts ----------------------------
         if ev.type == pg.KEYDOWN:
-            if ev.key == pg.K_F12: self._clear()
+            if ev.key == pg.K_F12:
+                self.state.players.clear()
+                self.state.team_counts.clear()
+                self._clear(message = False)
+                self.message = "Roster cleared - Let's start a new game"
             if ev.key == pg.K_F5:  self.on_start()
 
         # Delegate mouse/keyboard to widgets
@@ -95,7 +92,7 @@ class PlayerEntry:
         self.team_sel.handle_event(ev)
         self.btn_add.handle_event(ev)
 
-        self.in_addr.handle_event(ev) # ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+        self.in_addr.handle_event(ev) 
         self.in_port.handle_event(ev)
 
     def update(self, dt):  # not used now, but kept for future timers/validation
@@ -124,27 +121,34 @@ class PlayerEntry:
         self.in_port.draw(surf)
 
         # Team chart (right panel)
-        draw_bar_chart(surf, pg.Rect(surf.get_width()-320, 60, 260, 140),
-                       self.state.team_counts, "Teams")
+        draw_team_table(surf, pg.Rect(surf.get_width()-380, 40, 340, 420),
+                       self.state.players, "Teams")
+        
+        # Bar chart below the team table
+        draw_bar_chart(surf, pg.Rect(surf.get_width() - 380, 480, 340, 100),
+                       self.state.team_counts, "Team Counts")
+
 
         # Status + hints
         if self.message:
             surf.blit(self.font.render(self.message, True, (250,220,120)), (40, 330))
         surf.blit(self.font.render("F5: Start   F12: Clear", True, (170,180,195)), (40, 370))
 
-        surf.blit(self.font.render("UDP Target", True, (220,220,230)), (40, 395)) #//////////////////////////////////////////////////////////////////////////////////////////
+        surf.blit(self.font.render("UDP Target", True, (220,220,230)), (40, 395)) 
         self.in_addr.draw(surf); self.in_port.draw(surf)
 
 
     # -------------------------------------------------------------------------
     # Helpers
-    def _clear(self):
+    def _clear(self, message = True):
         """Clear inputs and reset to defaults."""
         self.in_pid.clear()
         self.in_name.clear()
         self.in_equip.clear()
         self.team_sel.idx = 0
-        self.message = ""
+
+        if message:
+            self.message = ""
         self.in_pid.focus = True
 
     # -------------------------------------------------------------------------
@@ -242,3 +246,6 @@ class PlayerEntry:
         # Final user message depends on whether we were on real services or stubs
         self.message = "Added player + broadcast sent" if not USE_STUBS else \
                     "Added player (DB/UDP stubbed locally)"
+        
+        self._clear(message = False)
+
