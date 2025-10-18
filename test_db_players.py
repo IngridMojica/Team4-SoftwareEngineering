@@ -1,5 +1,9 @@
 from db_players import add_player, get_codename, get_all_players_info, clear_all_players
 
+## Test just the database
+print("\nDisplaying Players Table:", get_all_players_info())
+
+## Test database functionality independently
 # print("Insert first player:", add_player(500, "Frank")) # True
 # print("Insert second player:", add_player(501, "Jeremy")) # True
 
@@ -12,4 +16,4 @@ from db_players import add_player, get_codename, get_all_players_info, clear_all
 
 # print("\nDisplaying Players Table:", get_all_players_info()) # [(500, 'Frank'), (501, 'Jeremy'), (502, 'Frank')]
 # print("\n**Now Clearing Players Table:**", clear_all_players()) # None
-print("\nDisplaying Post-Clear Command Players Table:", get_all_players_info()) # []
+# print("\nDisplaying Post-Clear Command Players Table:", get_all_players_info()) # []
