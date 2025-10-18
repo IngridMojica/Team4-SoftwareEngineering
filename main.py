@@ -2,6 +2,7 @@
 import sys
 import pygame
 from src.ui.screens.player_entry import PlayerEntry  # << use real screen
+from src.ui.screens.play_display import PlayDisplay
 
 # -----------------------------
 # Config
@@ -91,16 +92,21 @@ class PlayerEntryScreen(BaseScreen):
         self.view.draw(surface)
 
 # -----------------------------
-# Play Screen (stub)
+# Play Display Screen (using Diego's view)
 # -----------------------------
-class PlayScreen(BaseScreen):
-    def on_enter(self):
-        self.font = pygame.font.SysFont("consolas", 28)
+class PlayDisplayScreen(BaseScreen):
+    def __init__(self, manager, state: AppState):
+        super().__init__(manager)
+        self.view = PlayDisplay(state)
+
+    def handle_event(self, event):  # no inputs yet
+        pass
+
+    def update(self, dt):
+        self.view.update(dt)
 
     def draw(self, surface):
-        surface.fill((12, 16, 18))
-        text = self.font.render("Play Screen - game goes here", True, (220, 235, 220))
-        surface.blit(text, text.get_rect(center=(WIDTH//2, HEIGHT//2)))
+        self.view.draw(surface)
 
 # -----------------------------
 # Screen Manager
@@ -137,7 +143,7 @@ class App:
         self.manager = ScreenManager()
         self.manager.register("splash", SplashScreen(self.manager))
         self.manager.register("player_entry", PlayerEntryScreen(self.manager, self.state))
-        self.manager.register("play", PlayScreen(self.manager))
+        self.manager.register("play", PlayDisplayScreen(self.manager, self.state))
         self.manager.switch_to("splash")
 
         self.running = True
