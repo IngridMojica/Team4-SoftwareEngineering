@@ -79,6 +79,7 @@ class PlayerEntry:
         # ----- Global keys: F12 clears, F5 starts ----------------------------
         if ev.type == pg.KEYDOWN:
             if ev.key == pg.K_F12:
+                db.clear_all_players()
                 self.state.players.clear()
                 self.state.team_counts.clear()
                 self._clear(message = False)
