@@ -10,7 +10,7 @@ from src.ui.screens.play_display import PlayDisplay
 WIDTH, HEIGHT = 900, 600
 FPS = 60
 SPLASH_DURATION_MS = 3000  # 3 seconds
-APP_TITLE = "Laser Tag - Sprint 2"
+APP_TITLE = "Laser Tag - Sprint 3"
 LOGO_PATH = "assets/logo.jpg"  # path to your logo
 
 # -----------------------------
@@ -99,8 +99,15 @@ class PlayDisplayScreen(BaseScreen):
         super().__init__(manager)
         self.view = PlayDisplay(state)
 
-    def handle_event(self, event):  # no inputs yet
-        pass
+    def on_enter(self):
+        # restarts the countdown every time Play is opened
+        if hasattr(self.view, "enter"):
+            self.view.enter()
+
+    def handle_event(self, event):
+        # forward events to the PlayDisplay view; pass manager so the view can switch screens
+        if hasattr(self.view, "handle_event"):
+            self.view.handle_event(event, manager=self.manager)
 
     def update(self, dt):
         self.view.update(dt)

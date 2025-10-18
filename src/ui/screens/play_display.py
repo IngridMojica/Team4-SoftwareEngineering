@@ -1,9 +1,11 @@
 # src/ui/screens/play_display.py
 import pygame
+import time
+from udp_broadcast import send_special_code
 
 # Try to read TEAM_CAP from your project config; fall back to 6 if not present.
 try:
-    from src.ui.config import TEAM_CAP  # if your team defined it here
+    from src.config import TEAM_CAP  # if your team defined it here
 except Exception:
     TEAM_CAP = 6
 
@@ -21,7 +23,7 @@ PAD = 16
 GAP = 24
 
 # Column labels (variable-width columns; 3-space gaps)
-COLUMNS = ["ID", "Codename", "Equip ID", "Hardware ID"]
+COLUMNS = ["ID", "Codename", "Equip ID", "Hardware ID", "Score"]
 
 
 def _norm_team(t: str) -> str:
@@ -51,6 +53,27 @@ class PlayDisplay:
         self.font_hdr = pygame.font.SysFont("Arial", 19, bold=True)
         self.font_title = pygame.font.SysFont("Arial", 22, bold=True)
         self._layout_ready = False
+        
+        # Countdown
+        self._countdown_steps = 30 # countdown from 30 to 1
+        self._step_seconds = 1.0  # each number lasts about 1s
+        self._go_seconds = 1.0    # show "GO!" for 1s
+        self._countdown_total = self._countdown_steps * self._step_seconds + self._go_seconds
+
+        # runtime flags
+        self._countdown_running = False
+        self._countdown_start = None
+        self._countdown_finished = False
+        self._sent_start_code = False
+
+        # fonts for overlay
+        self._overlay_big_font = None
+        self._overlay_small_font = None
+
+        # back button state
+        self._back_button_rect = None
+        self._back_button_text = "Back to Player Entry"
+        self._back_button_font = None
 
     # ---------- text helpers for clean alignment ----------
     def _ellipsize(self, text: str, max_w: int, font) -> str:
@@ -94,7 +117,48 @@ class PlayDisplay:
         self._layout_ready = True
 
     def update(self, dt: float):
-        pass
+        # nothing to do if countdown isn't active
+        if not self._countdown_running or self._countdown_finished:
+            return
+
+        # compute elapsed seconds
+        now = time.monotonic()
+        elapsed = now - self._countdown_start if self._countdown_start is not None else 0.0
+
+        # once countdown finishes, mark and send start code
+        if elapsed >= self._countdown_total:
+            if not self._countdown_finished:
+                self._countdown_finished = True
+                # broadcast the start code 202
+                if not self._sent_start_code:
+                    try:
+                        send_special_code(202, repeat=1, addr="127.0.0.1", port=7500)
+                    except Exception as e:
+                        print("Failed to send start code 202")
+                    self._sent_start_code = True
+            return
+    
+    def enter(self):
+        """
+        Restarts the pre-game countdown every time the screen is entered.
+        """
+        self._countdown_running = True
+        self._countdown_start = time.monotonic()
+        self._countdown_finished = False
+        self._sent_start_code = False
+
+    def handle_event(self, event, manager=None):
+        """
+        Handle input events. 
+        If the Back button is clicked switch back to the player entry screen.
+        """
+        # check left-click in button rect
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            pos = event.pos
+            if self._back_button_rect and self._back_button_rect.collidepoint(pos):
+                if manager:
+                    manager.switch_to("player_entry")
+                return
 
     def draw(self, surface: pygame.Surface):
         self._ensure_layout(surface)
@@ -110,14 +174,94 @@ class PlayDisplay:
                 "codename": _get(pdata, "codename"),
                 "equip_id": _get(pdata, "equip"),
                 "hardware_id": _get(pdata, "hardware_id"),
+                "score": _get(pdata, "score") or "0", # score is going to default to 0 for now
             }
             if team == "Red":
                 red.append(row)
             elif team == "Green":
                 green.append(row)
 
+        # draw both panels (left then right)
         self._draw_panel(surface, self.left_rect, "Red", red, TEAM_CAP, RED_ACCENT)
         self._draw_panel(surface, self.right_rect, "Green", green, TEAM_CAP, GREEN_ACCENT)
+
+        # draw a simple "Current Game Action" area across the bottom quarter
+        full_w, full_h = surface.get_size()
+        event_h = max(80, full_h // 4) # bottom quarter, min 80px
+        event_rect = pygame.Rect(PAD, full_h - PAD - event_h, full_w - PAD*2, event_h)
+        # background + border
+        pygame.draw.rect(surface, PANEL, event_rect, border_radius=8)
+        pygame.draw.rect(surface, MUTED, event_rect, width=1, border_radius=8)
+        # header text
+        header_surf = self.font_hdr.render("Current Game Action", True, TEXT)
+        surface.blit(header_surf, (event_rect.x + PAD, event_rect.y + PAD))
+
+        # ---------------- Countdown overlay ----------------
+        if self._countdown_running and not self._countdown_finished:
+            if self._overlay_big_font is None:
+                w, h = surface.get_size()
+                size = max(48, int(min(w, h) * 0.22))
+                self._overlay_big_font = pygame.font.SysFont("Arial", size, bold=True)
+            if self._overlay_small_font is None:
+                self._overlay_small_font = pygame.font.SysFont("Arial", 20)
+
+            # translucent overlay across full screen
+            overlay = pygame.Surface(surface.get_size(), flags=pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 190))
+            surface.blit(overlay, (0, 0))
+
+            now = time.monotonic()
+            elapsed = now - self._countdown_start if self._countdown_start is not None else 0.0
+
+            # determine which label to show
+            if elapsed < self._countdown_steps * self._step_seconds:
+                idx = int(elapsed // self._step_seconds)
+                label = str(self._countdown_steps - idx)
+            elif elapsed < self._countdown_total:
+                label = "GO!"
+            else:
+                label = "" # finished; update() will flip finished flag
+
+            if label:
+                big_surf = self._overlay_big_font.render(label, True, TEXT)
+                big_rect = big_surf.get_rect(center=(full_w // 2, full_h // 2))
+                surface.blit(big_surf, big_rect)
+                small = self._overlay_small_font.render("Get ready!", True, MUTED)
+                small_rect = small.get_rect(center=(full_w // 2, big_rect.bottom + 28))
+                surface.blit(small, small_rect)
+
+        # After countdown finishes, show a subtle "Game started!" status for visual confirmation
+        if self._countdown_finished:
+            started_surf = self.font.render("Game started!", True, (0,255,255))
+            surface.blit(started_surf, (full_w - started_surf.get_width() - 12, 8))
+        
+        # draw a footer hint near the bottom-right of the window
+        btn_w, btn_h = 160, 34
+        btn_x, btn_y = full_w - PAD - btn_w, full_h - PAD - btn_h
+        self._back_button_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        if self._back_button_font is None:
+            self._back_button_font = pygame.font.SysFont("Arial", 18, bold=True)
+
+        footer_hint = "Press Esc to exit OR"
+        footer_surf = self.font.render(footer_hint, True, MUTED)
+        gap_between = 12  # pixels between footer text and button
+        footer_x = btn_x - gap_between - footer_surf.get_width()
+        footer_y = btn_y + (btn_h - footer_surf.get_height()) // 2
+        surface.blit(footer_surf, (footer_x, footer_y))
+
+        # ---------- Back button to go back to Player Entry ----------
+        btn_w, btn_h = 160, 34
+        btn_x, btn_y = full_w - PAD - btn_w, full_h - PAD - btn_h
+        self._back_button_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        if self._back_button_font is None:
+            self._back_button_font = pygame.font.SysFont("Arial", 18, bold=True)
+
+        pygame.draw.rect(surface, PANEL, self._back_button_rect, border_radius=8)  # button background
+        pygame.draw.rect(surface, MUTED, self._back_button_rect, width=1, border_radius=8)  # outline
+
+        label_surf = self._back_button_font.render(self._back_button_text, True, TEXT)
+        label_rect = label_surf.get_rect(center=self._back_button_rect.center)
+        surface.blit(label_surf, label_rect)
 
     # ---------------- helpers ----------------
 
@@ -142,7 +286,7 @@ class PlayDisplay:
 
         # Include cell widths
         for r in rows:
-            cells = [r["id"], r["codename"], r["equip_id"], r["hardware_id"]]
+            cells = [r["id"], r["codename"], r["equip_id"], r["hardware_id"], r["score"]]
             for i, val in enumerate(cells):
                 w = self.font.size("" if val is None else str(val))[0]
                 if w > col_required[i]:
@@ -195,13 +339,9 @@ class PlayDisplay:
         # Rows (centered within each variable-width column)
         row_y = header_y + HEADER_H
         for r in rows:
-            cells = [r["id"], r["codename"], r["equip_id"], r["hardware_id"]]
+            cells = [r["id"], r["codename"], r["equip_id"], r["hardware_id"], r["score"]]
             for (x_start, w), cell in zip(col_boxes_abs, cells):
                 self._blit_centered(surface, self.font, cell, x_start, w, row_y, ROW_H)
             row_y += ROW_H
             if row_y > rect.bottom - PAD:
                 break
-
-        # Footer hint
-        hint = "F5 to open Play • Esc to exit"
-        surface.blit(self.font.render(hint, True, MUTED), (rect.x + PAD, rect.bottom - PAD - 18))
