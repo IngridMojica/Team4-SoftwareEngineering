@@ -240,7 +240,12 @@ class PlayerEntry:
             self.message = f"UDP send error; continuing. ({e})"
 
         # Update in-memory state for UI/chart either way
-        self.state.players[pid] = {"codename": codename, "team": team, "equip": equip}
+        self.state.players[pid] = {
+            "codename": codename,
+            "team": team,
+            "equip": equip,
+            "hardware_id": f"H-{equip}"  # TEMP placeholder (e.g., "H-101")
+        }
         self.state.team_counts[team] = self.state.team_counts.get(team, 0) + 1
 
         # Final user message depends on whether we were on real services or stubs
