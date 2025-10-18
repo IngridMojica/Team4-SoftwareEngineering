@@ -23,7 +23,7 @@ PAD = 16
 GAP = 24
 
 # Column labels (variable-width columns; 3-space gaps)
-COLUMNS = ["ID", "Codename", "Equip ID", "Hardware ID", "Score"]
+COLUMNS = ["ID", "Codename", "Equip ID", "Score"]
 
 
 def _norm_team(t: str) -> str:
@@ -173,7 +173,6 @@ class PlayDisplay:
                 "id": pid,
                 "codename": _get(pdata, "codename"),
                 "equip_id": _get(pdata, "equip"),
-                "hardware_id": _get(pdata, "hardware_id"),
                 "score": _get(pdata, "score") or "0", # score is going to default to 0 for now
             }
             if team == "Red":
@@ -235,22 +234,8 @@ class PlayDisplay:
             started_surf = self.font.render("Game started!", True, (0,255,255))
             surface.blit(started_surf, (full_w - started_surf.get_width() - 12, 8))
         
-        # draw a footer hint near the bottom-right of the window
-        btn_w, btn_h = 160, 34
-        btn_x, btn_y = full_w - PAD - btn_w, full_h - PAD - btn_h
-        self._back_button_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
-        if self._back_button_font is None:
-            self._back_button_font = pygame.font.SysFont("Arial", 18, bold=True)
-
-        footer_hint = "Press Esc to exit OR"
-        footer_surf = self.font.render(footer_hint, True, MUTED)
-        gap_between = 12  # pixels between footer text and button
-        footer_x = btn_x - gap_between - footer_surf.get_width()
-        footer_y = btn_y + (btn_h - footer_surf.get_height()) // 2
-        surface.blit(footer_surf, (footer_x, footer_y))
-
-        # ---------- Back button to go back to Player Entry ----------
-        btn_w, btn_h = 160, 34
+        # draw back button to go back to player entry
+        btn_w, btn_h = 190, 34
         btn_x, btn_y = full_w - PAD - btn_w, full_h - PAD - btn_h
         self._back_button_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
         if self._back_button_font is None:
@@ -258,7 +243,6 @@ class PlayDisplay:
 
         pygame.draw.rect(surface, PANEL, self._back_button_rect, border_radius=8)  # button background
         pygame.draw.rect(surface, MUTED, self._back_button_rect, width=1, border_radius=8)  # outline
-
         label_surf = self._back_button_font.render(self._back_button_text, True, TEXT)
         label_rect = label_surf.get_rect(center=self._back_button_rect.center)
         surface.blit(label_surf, label_rect)
@@ -286,7 +270,7 @@ class PlayDisplay:
 
         # Include cell widths
         for r in rows:
-            cells = [r["id"], r["codename"], r["equip_id"], r["hardware_id"], r["score"]]
+            cells = [r["id"], r["codename"], r["equip_id"], r["score"]]
             for i, val in enumerate(cells):
                 w = self.font.size("" if val is None else str(val))[0]
                 if w > col_required[i]:
@@ -339,7 +323,7 @@ class PlayDisplay:
         # Rows (centered within each variable-width column)
         row_y = header_y + HEADER_H
         for r in rows:
-            cells = [r["id"], r["codename"], r["equip_id"], r["hardware_id"], r["score"]]
+            cells = [r["id"], r["codename"], r["equip_id"], r["score"]]
             for (x_start, w), cell in zip(col_boxes_abs, cells):
                 self._blit_centered(surface, self.font, cell, x_start, w, row_y, ROW_H)
             row_y += ROW_H

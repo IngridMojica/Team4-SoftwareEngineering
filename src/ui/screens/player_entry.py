@@ -132,7 +132,7 @@ class PlayerEntry:
         # Status + hints
         if self.message:
             surf.blit(self.font.render(self.message, True, (250,220,120)), (40, 330))
-        surf.blit(self.font.render("F5: Start   F12: Clear", True, (170,180,195)), (40, 370))
+        surf.blit(self.font.render("F5: Start   F12: Clear   Esc: Exit", True, (170,180,195)), (40, 370))
 
         surf.blit(self.font.render("UDP Target", True, (220,220,230)), (40, 395)) 
         self.in_addr.draw(surf); self.in_port.draw(surf)
@@ -244,7 +244,6 @@ class PlayerEntry:
             "codename": codename,
             "team": team,
             "equip": equip,
-            "hardware_id": f"H-{equip}"  # TEMP placeholder (e.g., "H-101")
         }
         self.state.team_counts[team] = self.state.team_counts.get(team, 0) + 1
 
@@ -253,4 +252,3 @@ class PlayerEntry:
                     "Added player (DB/UDP stubbed locally)"
         
         self._clear(message = False)
-
