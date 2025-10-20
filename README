@@ -1,140 +1,94 @@
-# Team 4 – Software Engineering Class Project
+# Team 4 – Laser Tag Game (Sprint 3)
 
-This repository contains both database and UDP messaging modules for Team 4’s class project.
+This repository contains **Team 4’s Software Engineering Class Project** – a Laser Tag Game simulation that integrates:
+- A database-backed Player Entry Screen  
+- UDP broadcasting for equipment codes  
+- Countdown Timer and Play Action Display  
+- Install Script and setup documentation for testing on a VM  
 
 ---
 
 ## Team Members
 
-| Real Name         | GitHub Username      |
-|-------------------|---------------------|
-| Ruben Priest      | ruben-priest        |
-| Tyler Bean        | FreezyMK1           |
-| Timothy Shtunyuk  | tshtu21             |
-| Diego Peredo      |                     |
-| Ingrid Mojica     | IngridMojica        |
+| Real Name | GitHub Username |
+|------------|----------------|
+| Ruben Priest | ruben-priest |
+| Tyler Bean | FreezyMK1 |
+| Timothy Shtunyuk | tshtu21 |
+| Diego Peredo | — |
+| Ingrid Mojica | IngridMojica |
 
 ---
 
-## Project Structure
+## Files & Modules
 
-### Database Section
+### Core Application
+- `main.py` → Main app loop, screen management, and entry point.  
+- `src/ui/screens/player_entry.py` → Player Entry UI (screen logic, DB + UDP integration).  
+- `src/ui/screens/play_display.py` → Play Action Display screen (countdown + team display).  
+- `src/graphs/charts.py` → Team bar chart visualization.  
+- `src/config.py` → Global constants (`TEAM_CAP`, window size, ports).  
 
-- `db_players.py`: Database helper functions using `psycopg2` and parameterized queries.
-- `test_players.py`: Script to verify player insertions and codename lookups.
-- `install.sh`: Helper to create a Python virtual environment and install `psycopg2-binary`.
+### UI Widgets
+- `src/ui/widgets/widgets_core.py` → Base widgets (`Label`, `Button`).  
+- `src/ui/widgets/inputs.py` → Input widgets (`TextInput`, `TeamSelector`).  
 
-### UDP Networking Section
+### Networking & Database
+- `udp_broadcast.py` → Sends equipment IDs, hits, and special codes over UDP.  
+- `udp_receiver.py` → Listens for UDP messages and queues them for processing.  
+- `db_players.py` → Handles PostgreSQL player insertion and codename lookup.  
 
-- `udp_broadcast.py`: Functions for sending equipment IDs, hit events, and special codes.
-- `udp_receiver.py`: Contains `Receiver` class and functions for starting, stopping, and retrieving UDP messages.
-
----
-
-## Installation & Environment Setup
-
-**Database setup:**
-
-1. Create and activate a virtual environment:
-    ```
-    python -m venv .venv
-    . .venv/bin/activate
-    ```
-2. Install dependencies:
-    ```
-    python -m pip install --upgrade pip
-    python -m pip install psycopg2-binary
-    ```
-
-Alternatively, run the following inside a virtual environment:
-
-bash install.sh
+### DevOps & Docs
+- `install.sh` → Automated setup script for VMs and local testing.  
+- `requirements.txt` → Python dependencies (`pygame`, `psycopg2-binary`).  
+- `README.md` → Installation, usage, and submission instructions.  
 
 ---
 
-## Usage
+## Features Implemented
 
-### Database Functions
+### Player Entry Screen
+- Player ID (numeric only)  
+- Codename (text input)  
+- Equipment ID (numeric only)  
+- Team selector (Red / Green)  
+- Duplicate and capacity checks (uses `TEAM_CAP = 15`)  
+- Database insert and lookup via `db_players.py`  
+- UDP broadcast of equipment ID after adding a player  
 
-1. **Activate the environment:**
-    ```
-    . .venv/bin/activate
-    ```
-2. **Run the test script to ensure the database is responding:**
-    ```
-    python test_db_players.py
-    ```
-    **Expected example output:**
-    ```
-    Insert first player: True
-    Insert second player: True
-    Inserting a duplicate id & name: False
-    Inserting a duplicate id: False
-    Inserting a duplicate name: True
-    Lookup existing codename: Frank
-    Lookup non-existing codename: None
-    ```
+### Keyboard Shortcuts
+| Key | Action |
+|------|--------|
+| **TAB** | Cycle between fields (Player ID → Name → Equip) |
+| **F12** | Clear form inputs |
+| **F5** | Start game / switch to Play Action Display |
+| **ESC** | Exit application |
 
-3. **NOTES**
-    ***If the above is outputted, then the database is correctly connected and working.***
-    ***Meaning, each function within db_players.py is working as intended independent of the ui.***
+### Play Action Display
+- Displays team rosters after game start.  
+- Countdown timer before play begins.  
+- Live chart of team sizes.  
 
----
+### Database Integration
+- PostgreSQL database (`photon`) with `players(id, codename)` table.  
+- Insert only if ID not already exists.  
+- Simple testing via `test_players.py`.  
 
-### UDP Messaging
-
-1. **Start receiver (terminal A):**
-    ```
-    python udp_receiver.py
-    ```
-2. **Send broadcast messages (terminal B):**
-    ```
-    python udp_broadcast.py
-    ```
+### UDP Networking
+- **Send:** `127.0.0.1:7500`  
+- **Receive:** `0.0.0.0:7501`  
+- Message formats:
+  - `attacker:hit` (e.g. `12:34`)  
+  - Single equipment ID (e.g. `101`)  
+  - Special codes: `202` = start game, `221` = end game  
 
 ---
 
-## Database Verification in psql
+## Installation
 
-- **Describe the table:**
-    ```
-    psql -d photon -U student -h 127.0.0.1 -c "\d players"
-    ```
-- **View all player entries:**
-    ```
-    psql -d photon -U student -h 127.0.0.1 -c "SELECT id, codename FROM players ORDER BY id;"
-    ```
-- **Delete a test row (example id: 501):**
-    ```
-    psql -d photon -U student -h 127.0.0.1 -c "DELETE FROM players WHERE id = 501;"
-    ```
-
----
-
-## UDP Ports, Addresses & Message Formats
-
-- **Send (outgoing/game server):** `127.0.0.1:7500`
-- **Receive (events):** bind to `0.0.0.0:7501`
-
-**Message formats:**
-- Incoming: `"attacker:hit"` (example: `12:34`) and sometimes a single integer.
-- Reply/outgoing: equipment ID of hit player (single integer string, e.g. `"34"`).
-- Special codes:
-    - **202** = start  
-    - **221** = game end (send `221` three times)
-
----
-
-## Running the Main Application
-
-Use the following command depending on your Python setup:
-
-python main.py
-or
-
-python3 main.py
-
-text
-(Choose whichever works on your system.)
-
-*All commands and procedures in this README can be copy-pasted in your terminal or environment for setup and troubleshooting.*
+### Option 1 – Quick VM Setup
+```bash
+git clone https://github.com/IngridMojica/Team4-SoftwareEngineering.git
+cd Team4-SoftwareEngineering
+chmod +x install.sh
+./install.sh
