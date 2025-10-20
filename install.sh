@@ -88,7 +88,7 @@ fi
 cat <<'TXT'
 
 ------------------------------------------------------------
-✅ Environment ready.
+Environment ready.
 
 To activate later:
   source .venv/bin/activate
