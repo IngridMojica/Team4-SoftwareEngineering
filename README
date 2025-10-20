@@ -15,7 +15,7 @@ This repository contains **Team 4’s Software Engineering Class Project** – a
 | Ruben Priest | ruben-priest |
 | Tyler Bean | FreezyMK1 |
 | Timothy Shtunyuk | tshtu21 |
-| Diego Peredo | — |
+| Diego Peredo | diegop-sys |
 | Ingrid Mojica | IngridMojica |
 
 ---
