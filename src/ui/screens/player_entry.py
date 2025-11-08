@@ -245,6 +245,8 @@ class PlayerEntry:
             "codename": codename,
             "team": team,
             "equip": equip,
+            "score": 0,
+            "has_base": False,
         }
         self.state.team_counts[team] = self.state.team_counts.get(team, 0) + 1
 

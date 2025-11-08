@@ -3,6 +3,9 @@ import sys
 import pygame
 from src.ui.screens.player_entry import PlayerEntry  # << use real screen
 from src.ui.screens.play_display import PlayDisplay
+from udp_receiver import start_receiver
+from udp_broadcast import send_equipment_id
+from packet_handler import handle_packet
 
 # -----------------------------
 # Config
@@ -10,7 +13,7 @@ from src.ui.screens.play_display import PlayDisplay
 WIDTH, HEIGHT = 900, 600
 FPS = 60
 SPLASH_DURATION_MS = 3000  # 3 seconds
-APP_TITLE = "Laser Tag - Sprint 3"
+APP_TITLE = "Laser Tag - Sprint 4"
 LOGO_PATH = "assets/logo.jpg"  # path to your logo
 
 # -----------------------------
@@ -147,6 +150,9 @@ class App:
         # shared state for DB/UDP/UI
         self.state = AppState()
 
+        # start UDP receiver
+        self.receiver = start_receiver(bind_addr="0.0.0.0", port=7501)
+
         self.manager = ScreenManager()
         self.manager.register("splash", SplashScreen(self.manager))
         self.manager.register("player_entry", PlayerEntryScreen(self.manager, self.state))
@@ -167,11 +173,29 @@ class App:
                     if self.manager.active:
                         self.manager.active.handle_event(event)
 
+            # poll UDP messages
+            if hasattr(self, "receiver"):
+                msg = self.receiver.get_message_nowait()
+                if msg:
+                    text, addr = msg
+                    def _udp_send(equip_id: int):
+                        try:
+                            send_equipment_id(int(equip_id), addr=self.state.addr, port=7500)
+                        except Exception:
+                            pass
+                    handle_packet(text, self.state, udp_send=_udp_send)
+
             if self.manager.active:
                 self.manager.active.update(dt)
                 self.manager.active.draw(self.screen)
 
             pygame.display.flip()
+       
+        if hasattr(self, "receiver"):
+            try:
+                self.receiver.stop()
+            except Exception:
+                pass
 
         pygame.quit()
         sys.exit()
