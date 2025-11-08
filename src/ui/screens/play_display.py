@@ -1,5 +1,7 @@
 # src/ui/screens/play_display.py
+import os
 import pygame
+import random
 import time
 from udp_broadcast import send_special_code
 
@@ -43,7 +45,6 @@ def _get(d, key, default=""):
         v = getattr(d, key, default)
     return "" if v is None else str(v)
 
-
 class PlayDisplay:
     """Play screen view: shows Red/Green panels reading live from state.players."""
     def __init__(self, state):
@@ -66,6 +67,9 @@ class PlayDisplay:
         self._countdown_finished = False
         self._sent_start_code = False
         self._sent_end_code = False
+
+        # music flag
+        self._playing_music = False
 
         # fonts for overlay
         self._overlay_big_font = None
@@ -120,6 +124,17 @@ class PlayDisplay:
         self.right_rect = pygame.Rect(PAD + panel_w + GAP, PAD, panel_w, panel_h)
         self._layout_ready = True
 
+    def _music_start(self):
+        random_number = random.randint(1, 8)
+        print(f"now playing: {random_number}.mp3")
+        song_path = os.path.expanduser(f"assets/music/{random_number}.mp3")
+        pygame.mixer.music.load(song_path)
+        pygame.mixer.music.play()
+        # pygame.mixer.music.set_volume(0.5) # Uncomment + Adjust if too loud
+    
+    def _music_stop(self):
+        pygame.mixer.music.stop()
+
     def update(self, dt: float):
         # nothing to do if countdown isn't active
         if not self._countdown_running or self._countdown_finished:
@@ -127,7 +142,16 @@ class PlayDisplay:
 
         # compute elapsed seconds
         now = time.monotonic()
-        elapsed = now - self._countdown_start if self._countdown_start is not None else 0.0
+        elapsed = now - self._countdown_start if self._countdown_start is not None else 0.
+
+        # Start at 17
+        if (elapsed // 1) == 13 and not self._playing_music:
+            print("Starting background music...")
+            self._playing_music = True
+            self._music_start()
+
+        # if not self._playing_music:
+        #     self._music_stop()
 
         # once countdown finishes, mark and send start code
         if elapsed >= self._countdown_total:
@@ -148,13 +172,14 @@ class PlayDisplay:
     
     def enter(self):
         """
-        Restarts the pre-game countdown every time the screen is entered.
+        Restarts the pre-game countdown and resets music flag every time the screen is entered.
         """
         self._countdown_running = True
         self._countdown_start = time.monotonic()
         self._countdown_finished = False
         self._sent_start_code = False
         self._sent_end_code = False
+        self._playing_music = False
 
     def send_game_end(self):
         """
@@ -179,6 +204,8 @@ class PlayDisplay:
             pos = event.pos
             if self._back_button_rect and self._back_button_rect.collidepoint(pos):
                 if manager:
+                    print("Stopping background music...")
+                    self._music_stop()
                     manager.switch_to("player_entry")
                 return
 
