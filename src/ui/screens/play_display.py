@@ -25,7 +25,7 @@ PAD = 16
 GAP = 24
 
 # Column labels (variable-width columns; 3-space gaps)
-COLUMNS = ["ID", "Codename", "Equip ID", "Score"]
+COLUMNS = ["Base", "Codename", "Equip ID", "Score"]
 
 
 def _norm_team(t: str) -> str:
@@ -66,6 +66,7 @@ class PlayDisplay:
         self._countdown_start = None
         self._countdown_finished = False
         self._sent_start_code = False
+        self._sent_end_code = False
 
         # music flag
         self._playing_music = False
@@ -78,6 +79,9 @@ class PlayDisplay:
         self._back_button_rect = None
         self._back_button_text = "Back to Player Entry"
         self._back_button_font = None
+
+        # base icon
+        self._base_icon = None
 
     # ---------- text helpers for clean alignment ----------
     def _ellipsize(self, text: str, max_w: int, font) -> str:
@@ -161,6 +165,10 @@ class PlayDisplay:
                         print("Failed to send start code 202")
                     self._sent_start_code = True
             return
+        
+        # when 6 minute gameplay timer finishes, send end code
+        #if gameplay_elapsed >= GAME_DURATION_SECONDS and not self._sent_end_code:
+            #self.send_game_end()
     
     def enter(self):
         """
@@ -170,7 +178,21 @@ class PlayDisplay:
         self._countdown_start = time.monotonic()
         self._countdown_finished = False
         self._sent_start_code = False
+        self._sent_end_code = False
         self._playing_music = False
+
+    def send_game_end(self):
+        """
+        Send game end code 221 three times to configured UDP target.
+        """
+        if self._sent_end_code:
+            return
+        addr = getattr(self.state, "addr", "127.0.0.1")
+        try:
+            send_special_code(221, repeat=3, addr=addr, port=7500)
+        except Exception:
+            print("Failed to send game end code 221")
+        self._sent_end_code = True
 
     def handle_event(self, event, manager=None):
         """
@@ -197,10 +219,10 @@ class PlayDisplay:
         for pid, pdata in players_dict.items():
             team = _norm_team(_get(pdata, "team"))
             row = {
-                "id": pid,
                 "codename": _get(pdata, "codename"),
                 "equip_id": _get(pdata, "equip"),
                 "score": _get(pdata, "score") or "0", # score is going to default to 0 for now
+                "has_base": (pdata.get("has_base") if isinstance(pdata, dict) else getattr(pdata, "has_base", False)) or False,
             }
             if team == "Red":
                 red.append(row)
@@ -297,7 +319,7 @@ class PlayDisplay:
 
         # Include cell widths
         for r in rows:
-            cells = [r["id"], r["codename"], r["equip_id"], r["score"]]
+            cells = ["", r["codename"], r["equip_id"], r["score"]]
             for i, val in enumerate(cells):
                 w = self.font.size("" if val is None else str(val))[0]
                 if w > col_required[i]:
@@ -347,11 +369,31 @@ class PlayDisplay:
         for (label, (x_start, w)) in zip(COLUMNS, col_boxes_abs):
             self._blit_centered(surface, self.font_hdr, label, x_start, w, header_y, 20)
 
+        # Lazy load and scale the base icon
+        if self._base_icon is None:
+            try:
+                raw = pygame.image.load("assets/baseicon.jpg").convert_alpha()
+                # scale so height fits inside row
+                icon_h = max(16, ROW_H - 8)
+                scale = icon_h / raw.get_height()
+                icon_w = max(16, int(raw.get_width() * scale))
+                self._base_icon = pygame.transform.smoothscale(raw, (icon_w, icon_h))
+            except Exception:
+                self._base_icon = None
+
         # Rows (centered within each variable-width column)
         row_y = header_y + HEADER_H
         for r in rows:
-            cells = [r["id"], r["codename"], r["equip_id"], r["score"]]
-            for (x_start, w), cell in zip(col_boxes_abs, cells):
+            # Draw base icon (first column) if player has it
+            base_idx = 0
+            if r.get("has_base") and self._base_icon is not None:
+                x_start, w = col_boxes_abs[base_idx]
+                ix = x_start + (w - self._base_icon.get_width()) // 2
+                iy = row_y + (ROW_H - self._base_icon.get_height()) // 2
+                surface.blit(self._base_icon, (ix, iy))
+                    
+            cells = [r["codename"], r["equip_id"], r["score"]]
+            for (x_start, w), cell in zip(col_boxes_abs[1:], cells):
                 self._blit_centered(surface, self.font, cell, x_start, w, row_y, ROW_H)
             row_y += ROW_H
             if row_y > rect.bottom - PAD:
