@@ -41,11 +41,13 @@ def handle_packet(msg: str, state, udp_send=None):
                 if state.players[pid].get("team", "").lower().startswith("g"):
                     state.players[pid]["score"] = int(state.players[pid].get("score", 0)) + 100
                     state.players[pid]["has_base"] = True
+                    state.log_base(pid, "Red")
             # 43 -> green base scored => red attacker gets credit
             elif code == 43:
                 if state.players[pid].get("team", "").lower().startswith("r"):
                     state.players[pid]["score"] = int(state.players[pid].get("score", 0)) + 100
                     state.players[pid]["has_base"] = True
+                    state.log_base(pid, "Green")
             # reply with attacker equip id if udp_send provided
             if udp_send:
                 try:
@@ -70,6 +72,7 @@ def handle_packet(msg: str, state, udp_send=None):
             # opposing teams => attacker gains +10
             if (att_team and hit_team) and (att_team != hit_team):
                 state.players[attacker_pid]["score"] = int(state.players[attacker_pid].get("score", 0)) + 10
+                state.log_tag(attacker_pid, hit_pid, friendly=False)
                 # reply with hit equipment id
                 if udp_send:
                     try:
@@ -80,6 +83,7 @@ def handle_packet(msg: str, state, udp_send=None):
                 # friendly fire: both lose 10, send two transmissions:
                 state.players[attacker_pid]["score"] = int(state.players[attacker_pid].get("score", 0)) - 10
                 state.players[hit_pid]["score"] = int(state.players[hit_pid].get("score", 0)) - 10
+                state.log_tag(attacker_pid, hit_pid, friendly=True)
                 if udp_send:
                     try:
                         udp_send(hit_equip) # equipment id of player who got hit
