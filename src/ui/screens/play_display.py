@@ -450,14 +450,6 @@ class PlayDisplay:
 
         # Rows (centered within each variable-width column)
         row_y = top_hearders
-        #for r in rows:
-         #   cells = [r["has_base"], r["codename"], r["equip_id"], r["score"]]
-          #  for(x_start, w), cell in zip(col_boxes_abs, cells):
-           #     self._blit_centered(surface, self.font, cell, x_start, w, row_y, row_h)
-            #row_y += row_h
-            #if row_y > rect.bottom - PAD:
-             #   break
-
 
         for r in rows:
             # Draw base icon (first column) if player has it
