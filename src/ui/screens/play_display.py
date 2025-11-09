@@ -18,11 +18,17 @@ TEXT = (235, 235, 245)
 MUTED = (170, 170, 180)
 RED_ACCENT = (220, 70, 70)
 GREEN_ACCENT = (70, 200, 120)
+FLASH_COLOR = (255, 235, 59)
 
+FLASH_PERIOD = 0.5
 HEADER_H = 44
-ROW_H = 28
+EVENT_H = 0.20
+TITLE_Y = 4
+ROW_minH = 20
+ROW_maxH = 26
+TEAM_ROWS = 15
 PAD = 16
-GAP = 24
+GAP = 10
 
 # Column labels (variable-width columns; 3-space gaps)
 COLUMNS = ["Base", "Codename", "Equip ID", "Score"]
@@ -50,9 +56,9 @@ class PlayDisplay:
     def __init__(self, state):
         self.state = state
         pygame.font.init()
-        self.font = pygame.font.SysFont("Arial", 18)
-        self.font_hdr = pygame.font.SysFont("Arial", 19, bold=True)
-        self.font_title = pygame.font.SysFont("Arial", 22, bold=True)
+        self.font = pygame.font.SysFont("Arial", 16)
+        self.font_hdr = pygame.font.SysFont("Arial", 18, bold=True)
+        self.font_title = pygame.font.SysFont("Arial", 26, bold=True)
         self._layout_ready = False
         
         # Countdown
@@ -210,36 +216,82 @@ class PlayDisplay:
                 return
 
     def draw(self, surface: pygame.Surface):
-        self._ensure_layout(surface)
+        #self._ensure_layout(surface)
         surface.fill(BG)
+
+        # --- compute layout up front so team panels don't overlap the event box ---
+        full_w, full_h = surface.get_size()
+        event_h = max(72, int(full_h * EVENT_H))
+        event_rect = pygame.Rect(PAD, full_h - PAD - event_h, full_w - PAD*2, event_h)
+
+        total_w = full_w - (PAD * 2) - GAP
+        panel_w = total_w // 2
+        panel_h = full_h - (PAD * 3) - event_h   # <-- reserve vertical space for event panel
+        self.left_rect  = pygame.Rect(PAD, PAD, panel_w, panel_h)
+        self.right_rect = pygame.Rect(PAD + panel_w + GAP, PAD, panel_w, panel_h)
 
         # Build live lists from state.players (expected: dict pid -> {codename, team, equip, hardware_id?})
         players_dict = getattr(self.state, "players", {}) or {}
         red, green = [], []
+        red_total, green_total = 0, 0
+
         for pid, pdata in players_dict.items():
             team = _norm_team(_get(pdata, "team"))
+
+            try:
+                score_value = int(_get(pdata, "score") or 0)
+            except ValueError:
+                score_value = 0
+
             row = {
                 "codename": _get(pdata, "codename"),
                 "equip_id": _get(pdata, "equip"),
-                "score": _get(pdata, "score") or "0", # score is going to default to 0 for now
+                #"score": _get(pdata, "score") or "0", # score is going to default to 0 for now
+                "score": str(score_value),
                 "has_base": (pdata.get("has_base") if isinstance(pdata, dict) else getattr(pdata, "has_base", False)) or False,
             }
+
             if team == "Red":
                 red.append(row)
+                red_total += score_value
             elif team == "Green":
                 green.append(row)
+                green_total += score_value
+
+        #sort players from high to low within each team
+        red.sort(key=lambda r: int(r["score"]), reverse=True)
+        green.sort(key=lambda r: int(r["score"]), reverse=True)
+
+        #score flashing
+        flash_red = red_total > green_total
+        flash_green = green_total > red_total
 
         # draw both panels (left then right)
-        self._draw_panel(surface, self.left_rect, "Red", red, TEAM_CAP, RED_ACCENT)
-        self._draw_panel(surface, self.right_rect, "Green", green, TEAM_CAP, GREEN_ACCENT)
+        self._draw_panel(surface, self.left_rect, "Red", red, TEAM_CAP, RED_ACCENT, team_score = red_total, flash = flash_red)
+        self._draw_panel(surface, self.right_rect, "Green", green, TEAM_CAP, GREEN_ACCENT, team_score=green_total, flash=flash_green)
 
         # draw a simple "Current Game Action" area across the bottom quarter
-        full_w, full_h = surface.get_size()
-        event_h = max(80, full_h // 4) # bottom quarter, min 80px
-        event_rect = pygame.Rect(PAD, full_h - PAD - event_h, full_w - PAD*2, event_h)
+        #full_w, full_h = surface.get_size()
+        #event_h = max(80, full_h // 4) # bottom quarter, min 80px
+        #event_rect = pygame.Rect(PAD, full_h - PAD - event_h, full_w - PAD*2, event_h)
+
+        line_h = 22
+        max_lines = (event_rect.height - (PAD * 2) - 8)
+        events = list(getattr(self.state, "event_log", []))[-max_lines:]
+        start_y = event_rect.bottom - PAD - (len(events) * line_h)
+        x = event_rect.x + PAD
+        y = max(event_rect.y + PAD + 28, start_y)
+
+        for e in events:
+            txt = e["text"] if isinstance(e, dict) else str(e)
+            txt = self._ellipsize(txt, event_rect.width - PAD * 2, self.font)
+            surface.blit(self.font.render(txt, True, TEXT), (x, y))
+            y += line_h
+
         # background + border
         pygame.draw.rect(surface, PANEL, event_rect, border_radius=8)
         pygame.draw.rect(surface, MUTED, event_rect, width=1, border_radius=8)
+
         # header text
         header_surf = self.font_hdr.render("Current Game Action", True, TEXT)
         surface.blit(header_surf, (event_rect.x + PAD, event_rect.y + PAD))
@@ -348,16 +400,25 @@ class PlayDisplay:
 
         return boxes, gap_px
 
-    def _draw_panel(self, surface, rect, team_name, rows, cap, accent):
+    def _draw_panel(self, surface, rect, team_name, rows, cap, accent, *, team_score = 0, flash=False):
         # Panel background
         pygame.draw.rect(surface, PANEL, rect, border_radius=12)
 
         # Title with count
         title = f"{team_name}  ({len(rows)}/{cap})"
-        surface.blit(self.font_title.render(title, True, accent), (rect.x + PAD, rect.y + PAD))
+        title_surf = self.font_title.render(title, True, accent)
+        title_pos = (rect.x + PAD, rect.y + PAD)
+        surface.blit(title_surf, title_pos)
+
+        #Score text
+        score_text = f"Score: {team_score}"
+        blink_on = flash and (int(time.monotonic() / FLASH_PERIOD) % 2 == 0)
+        score_color = FLASH_COLOR if blink_on else TEXT
+        score_surf = self.font_title.render(score_text, True, score_color)
+        surface.blit(score_surf, (title_pos[0] + title_surf.get_width() + 14, title_pos[1]))
 
         # Layout metrics
-        header_y = rect.y + PAD + 36
+        header_y = title_pos[1] + title_surf.get_height() + TITLE_Y
         avail_w = rect.width - (PAD * 2)
 
         # --- variable-width columns with 3-space gaps ---
@@ -367,14 +428,20 @@ class PlayDisplay:
 
         # Column headers (centered)
         for (label, (x_start, w)) in zip(COLUMNS, col_boxes_abs):
-            self._blit_centered(surface, self.font_hdr, label, x_start, w, header_y, 20)
+            self._blit_centered(surface, self.font_hdr, label, x_start, w, header_y, self.font_hdr.get_height())
+
+        #autosize rows
+        rows_target = max(TEAM_ROWS, len(rows))
+        top_hearders = header_y + self.font_hdr.get_height() + GAP
+        height_avail = (rect.bottom - PAD) - top_hearders
+        row_h = int(max(ROW_minH, min(ROW_maxH, height_avail/rows_target)))
 
         # Lazy load and scale the base icon
         if self._base_icon is None:
             try:
                 raw = pygame.image.load("assets/baseicon.jpg").convert_alpha()
                 # scale so height fits inside row
-                icon_h = max(16, ROW_H - 8)
+                icon_h = max(16, row_h - 8)
                 scale = icon_h / raw.get_height()
                 icon_w = max(16, int(raw.get_width() * scale))
                 self._base_icon = pygame.transform.smoothscale(raw, (icon_w, icon_h))
@@ -382,19 +449,28 @@ class PlayDisplay:
                 self._base_icon = None
 
         # Rows (centered within each variable-width column)
-        row_y = header_y + HEADER_H
+        row_y = top_hearders
+        #for r in rows:
+         #   cells = [r["has_base"], r["codename"], r["equip_id"], r["score"]]
+          #  for(x_start, w), cell in zip(col_boxes_abs, cells):
+           #     self._blit_centered(surface, self.font, cell, x_start, w, row_y, row_h)
+            #row_y += row_h
+            #if row_y > rect.bottom - PAD:
+             #   break
+
+
         for r in rows:
             # Draw base icon (first column) if player has it
             base_idx = 0
             if r.get("has_base") and self._base_icon is not None:
                 x_start, w = col_boxes_abs[base_idx]
                 ix = x_start + (w - self._base_icon.get_width()) // 2
-                iy = row_y + (ROW_H - self._base_icon.get_height()) // 2
+                iy = row_y + (row_h - self._base_icon.get_height()) // 2
                 surface.blit(self._base_icon, (ix, iy))
                     
             cells = [r["codename"], r["equip_id"], r["score"]]
             for (x_start, w), cell in zip(col_boxes_abs[1:], cells):
-                self._blit_centered(surface, self.font, cell, x_start, w, row_y, ROW_H)
-            row_y += ROW_H
+                self._blit_centered(surface, self.font, cell, x_start, w, row_y, row_h)
+            row_y += row_h
             if row_y > rect.bottom - PAD:
                 break

@@ -6,6 +6,9 @@ from src.ui.screens.play_display import PlayDisplay
 from udp_receiver import start_receiver
 from udp_broadcast import send_equipment_id
 from packet_handler import handle_packet
+from collections import deque
+import time
+
 
 # -----------------------------
 # Config
@@ -25,8 +28,30 @@ class AppState:
         self.team_counts = {"Red": 0, "Green": 0}
         # pid -> {codename, team, equip}
         self.players = {}
+        #rollong play-by-play log
+        self.event_log = deque(maxlen=200)
         # where UDP should broadcast by default (can be changed later)
         self.addr = "127.0.0.1"
+
+    def name_(self, pid):
+        player = self.players.get(pid, {})
+        return player.get("codename") or str(pid)
+
+    #play-by-play
+    def log_tag(self, shooter_pid, target_pid, friendly=False):
+        sname = self.name_(shooter_pid)
+        tname = self.name_(target_pid)
+        if friendly:
+            text = f"Friendly fire: {sname} tagged teammate {tname} (−10 each)"
+        else:
+            text = f"{sname} tagged {tname} (+10 {sname})"
+        self.event_log.append({"ts": time.time(), "text": text})
+
+    def log_base(self, shooter_pid, base_color):
+        sname = self.name_(shooter_pid)
+        text = f"{sname} scored the {base_color} base! (+100)"
+        self.event_log.append({"ts": time.time(), "text": text})
+
 
 # -----------------------------
 # Base Screen Class
