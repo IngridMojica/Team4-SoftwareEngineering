@@ -193,6 +193,7 @@ class PlayDisplay:
                 if manager:
                     print("Stopping background music...")
                     self._music_stop()
+                    send_special_code(221, repeat=3, addr=getattr(self.state, "addr", "127.0.0.1"), port=7500)
                     manager.switch_to("player_entry")
                 return
 
