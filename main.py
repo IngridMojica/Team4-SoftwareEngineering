@@ -122,10 +122,17 @@ class PlayerEntryScreen(BaseScreen):
     def __init__(self, manager, state: AppState):
         super().__init__(manager)
         self.state = state
+
+        def _on_start():
+            app = getattr(manager, "_app", None)
+            if app:
+                app.reset_scores_bases() # reset scores and base icon for a new game
+            manager.switch_to("play")
+
         # create the actual PlayerEntry view and tell it how to start the game
         self.view = PlayerEntry(
             state=state,
-            on_start=lambda: self.manager.switch_to("play")
+            on_start=_on_start
         )
 
     # delegate lifecycle + io to the real view so all buttons/inputs work
@@ -230,6 +237,12 @@ class App:
 
         # one-shot end-code guard
         self._end_broadcasted = False
+    
+    def reset_scores_bases(self):
+        players = getattr(self.state, "players", {}) or {}
+        for pdata in players.values():
+            pdata["score"] = 0
+            pdata["has_base"] = False
 
     def run(self):
         while self.running:
